@@ -4,8 +4,6 @@ from fastapi import FastAPI, Request
 from telegram import Bot
 from supabase import create_client
 
-
-
 # ================= CONFIG =================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -47,7 +45,7 @@ def recall_memories(user_id: str, query: str, limit: int = 5):
     res = (
         supabase
         .table("memories")
-        .select("content,timestamp_human")
+        .select("content, timestamp_human")
         .eq("user_id", user_id)
         .ilike("content", f"%{query}%")
         .order("created_at", desc=True)
@@ -72,9 +70,7 @@ async def webhook(request: Request):
 
     # ---------- RECALL ----------
     if is_question(text):
-        keywords = text.lower().replace("when did i", "").replace("what", "").strip()
-memories = recall_memories(str(chat_id), keywords)
-
+        memories = recall_memories(str(chat_id), text)
 
         if not memories:
             await bot.send_message(chat_id, "I don’t have any record of that yet.")
