@@ -50,7 +50,9 @@ def extract_topic(text: str) -> str:
 def store_memory(user_id: str, raw_text: str):
     supabase.table("memories").insert({
         "user_id": user_id,
+        "content": raw_text,          # 🔴 REQUIRED COLUMN
         "raw_text": raw_text,
+        "source": "telegram",
         "timestamp_human": ist_now_human()
     }).execute()
 
