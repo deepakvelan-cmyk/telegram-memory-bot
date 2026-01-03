@@ -54,7 +54,12 @@ def handle_date_time(text: str):
 # ================= INTENT =================
 def is_past_question(text: str):
     t = text.lower()
-    return any(x in t for x in ["when", "what", "did i", "went", "had", "issue"])
+    return any(x in t for x in [
+        "when", "what", "did i",
+        "car", "battery", "issue", "problem",
+        "movie", "went", "faced"
+    ])
+
 
 def is_pending_query(text: str):
     t = text.lower()
@@ -77,7 +82,7 @@ You are a personal AI assistant with memory.
 RULES:
 - You DO have memory.
 - If memory exists, use it.
-- If nothing is found, say: "I don’t find anything recorded yet."
+- If nothing is found, say: "I don’t see a matching record yet, but I may have related notes."
 - Never say you have no memory.
 
 MEMORY:
@@ -146,13 +151,19 @@ async def webhook(request: Request):
 
     reply = ai_answer(text, memories)
 
-    # 6. Store declarative statements (facts)
-    if not is_past_question(text):
-        supabase.table("memories").insert({
-            "content": text,
-            "category": "general",
-            "embedding": embed(text)
-        }).execute()
+    # 6. # 6️⃣ ALWAYS store personal facts
+fact_triggers = [
+    "i had", "i have", "i faced", "i went", "i did",
+    "my car", "battery", "issue", "problem", "movie"
+]
+
+if any(t in text.lower() for t in fact_triggers):
+    supabase.table("memories").insert({
+        "content": text,
+        "category": "personal_fact",
+        "embedding": embed(text)
+    }).execute()
+)
 
     await bot.send_message(chat_id, reply)
     return {"ok": True}
