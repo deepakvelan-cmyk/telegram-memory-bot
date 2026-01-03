@@ -3,9 +3,9 @@ from datetime import datetime
 from fastapi import FastAPI, Request
 from telegram import Bot
 from supabase import create_client
-from dotenv import load_dotenv
 
-load_dotenv()
+
+
 
 # ================= CONFIG =================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
