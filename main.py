@@ -1,6 +1,8 @@
 import os
+import json
 import re
-from datetime import datetime, date, timedelta
+from datetime import datetime
+import pytz
 from fastapi import FastAPI, Request
 from telegram import Bot
 from supabase import create_client
@@ -12,112 +14,91 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# ================= CLIENTS =================
 bot = Bot(token=TELEGRAM_TOKEN)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
-# ================= EMBEDDINGS =================
+# ================= LOAD CONFIG =================
+with open("assistant_config.json", "r") as f:
+    CONFIG = json.load(f)
+
+MEMORY_RULES = CONFIG.get("MEMORY_RULES", [])
+PEOPLE = CONFIG.get("PEOPLE", [])
+WORK_CONTEXT = CONFIG.get("WORK_CONTEXT", [])
+SENSITIVITY = CONFIG.get("SENSITIVITY", [])
+BEHAVIOR = {x["setting"]: x["value"] for x in CONFIG.get("BEHAVIOR_PREFERENCES", [])}
+
+IST = pytz.timezone("Asia/Kolkata")
+
+# ================= UTILITIES =================
+def now_utc():
+    return datetime.utcnow()
+
+def now_ist_human():
+    return datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
+
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower().strip())
+
 def embed(text: str):
-    res = client.embeddings.create(
+    res = openai_client.embeddings.create(
         model="text-embedding-3-small",
         input=text
     )
     return res.data[0].embedding
 
-# ================= DATE PARSER =================
-def extract_date(text: str) -> date | None:
+# ================= RULE ENGINE =================
+def match_memory_rule(text: str):
     t = text.lower()
+    for rule in MEMORY_RULES:
+        if rule["pattern"] in t:
+            return rule["action"], rule.get("category", "auto")
+    return None, None
 
-    if "today" in t:
-        return date.today()
+def resolve_category(text: str):
+    t = text.lower()
+    for p in PEOPLE:
+        if p["name"].lower() in t:
+            return p["domain"]
+    for w in WORK_CONTEXT:
+        if w["topic"].lower() in t:
+            return "work"
+    return "personal"
 
-    if "tomorrow" in t:
-        return date.today() + timedelta(days=1)
+def extract_last_n(text: str):
+    match = re.search(r"last\s+(\d+)", text.lower())
+    return int(match.group(1)) if match else None
 
-    if "monday" in t:
-        return date.today() + timedelta(days=(7 - date.today().weekday()) % 7)
+# ================= STORAGE =================
+def store_memory(raw_text: str, category: str):
+    ts_utc = now_utc()
+    ts_human = now_ist_human()
+    norm = normalize(raw_text)
 
-    match = re.search(r"(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", t)
-    if match:
-        day = int(match.group(1))
-        month = {
-            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
-        }[match.group(2)]
-        return date(date.today().year, month, day)
+    supabase.table("memories").insert({
+        "raw_text": raw_text,
+        "normalized_text": norm,
+        "category": category,
+        "timestamp_utc": ts_utc.isoformat(),
+        "timestamp_human": ts_human,
+        "embedding": embed(raw_text),
+        "metadata": {}
+    }).execute()
 
-    return None
+# ================= RECALL =================
+def recall_memories(query: str, limit: int | None = None):
+    q = normalize(query)
+    res = supabase.table("memories") \
+        .select("*") \
+        .ilike("normalized_text", f"%{q}%") \
+        .order("timestamp_utc", desc=True)
 
-# ================= INTENT HELPERS =================
-def is_add_reminder(text: str):
-    return any(x in text.lower() for x in [
-        "remind me", "add reminder", "set reminder"
-    ])
+    if limit:
+        res = res.limit(limit)
 
-def is_list_reminders(text: str):
-    return any(x in text.lower() for x in [
-        "upcoming reminders", "pending reminders",
-        "what reminders", "any reminders"
-    ])
-
-def should_store_note(text: str):
-    return any(x in text.lower() for x in [
-        "i went", "i met", "i need to", "i have to",
-        "i did", "i was", "follow up", "meeting",
-        "onboarding", "worked on", "spoke with"
-    ])
-
-def is_memory_recall(text: str):
-    return any(x in text.lower() for x in [
-        "when did", "what did", "anything regarding",
-        "notes about", "tell me about", "regarding"
-    ])
-
-# ================= MEMORY SEARCH =================
-def search_memory(text: str):
-    try:
-        emb = embed(text)
-        res = supabase.rpc(
-            "match_memories",
-            {
-                "query_embedding": emb,
-                "match_threshold": 0.6,
-                "match_count": 5
-            }
-        ).execute()
-        return res.data or []
-    except Exception as e:
-        print("MEMORY SEARCH ERROR:", e)
-        return []
-
-# ================= AI ANSWER =================
-def ai_answer(user_text: str, memories: list):
-    context = "\n".join(f"- {m['content']}" for m in memories)
-
-    prompt = f"""
-You are a personal assistant with memory.
-
-Rules:
-- If memory exists, answer from it
-- If not, say you don’t have a record yet
-- Be concise
-
-Memory:
-{context if context else "No matching memory"}
-"""
-
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_text}
-        ],
-        temperature=0.2
-    )
-    return res.choices[0].message.content.strip()
+    return res.execute().data or []
 
 # ================= WEBHOOK =================
 @app.post("/webhook")
@@ -130,75 +111,44 @@ async def webhook(request: Request):
     if not chat_id or not text:
         return {"ok": True}
 
-    text = text.strip()
+    raw_text = text.strip()
+    norm_text = normalize(raw_text)
 
-    # ---------- ADD REMINDER ----------
-    if is_add_reminder(text):
-        due = extract_date(text)
-        if not due:
-            await bot.send_message(chat_id, "Please tell me the date for the reminder.")
+    # ---------- RULE DECISION ----------
+    action, rule_category = match_memory_rule(norm_text)
+
+    # ---------- RECALL (LAST N TIMES) ----------
+    if action == "recall_memory" or "last" in norm_text:
+        n = extract_last_n(norm_text)
+        memories = recall_memories(norm_text, n)
+
+        if not memories:
+            await bot.send_message(chat_id, "I don’t have any record of that yet.")
             return {"ok": True}
 
-        try:
-            supabase.table("reminders").insert({
-                "user_id": str(chat_id),
-                "title": text,
-                "due_date": due.isoformat()
-            }).execute()
-            await bot.send_message(chat_id, f"Reminder added for {due.strftime('%d %b')}.")
-        except Exception as e:
-            print("REMINDER ERROR:", e)
-            await bot.send_message(chat_id, "I couldn’t save the reminder.")
-        return {"ok": True}
-
-    # ---------- LIST REMINDERS ----------
-    if is_list_reminders(text):
-        today = date.today().isoformat()
-        res = supabase.table("reminders") \
-            .select("*") \
-            .eq("user_id", str(chat_id)) \
-            .eq("completed", False) \
-            .gte("due_date", today) \
-            .order("due_date") \
-            .execute()
-
-        reminders = res.data or []
-        if not reminders:
-            await bot.send_message(chat_id, "You don’t have any upcoming reminders.")
-            return {"ok": True}
-
-        lines = ["Here are your upcoming reminders:"]
-        for r in reminders:
-            d = datetime.fromisoformat(r["due_date"]).strftime("%d %b")
-            lines.append(f"- {d}: {r['title']}")
+        lines = []
+        for i, m in enumerate(memories, 1):
+            lines.append(f"{i}. {m['timestamp_human']} – {m['raw_text']}")
 
         await bot.send_message(chat_id, "\n".join(lines))
         return {"ok": True}
 
-    # ---------- STORE NOTE ----------
-    if should_store_note(text):
-        try:
-            supabase.table("memories").insert({
-                "content": text,
-                "category": "note",
-                "embedding": embed(text)
-            }).execute()
-            await bot.send_message(chat_id, "Got it. I’ve noted this.")
-        except Exception as e:
-            print("NOTE ERROR:", e)
-            await bot.send_message(chat_id, "I heard you, but couldn’t save it.")
+    # ---------- STORE MEMORY ----------
+    if action == "store_memory":
+        category = resolve_category(norm_text) if rule_category == "auto" else rule_category
+        store_memory(raw_text, category)
+        await bot.send_message(chat_id, "Noted.")
         return {"ok": True}
 
-    # ---------- RECALL MEMORY ----------
-    if is_memory_recall(text):
-        memories = search_memory(text)
-        reply = ai_answer(text, memories)
-        await bot.send_message(chat_id, reply)
+    # ---------- LINKS (AUTO STORE) ----------
+    if "http://" in norm_text or "https://" in norm_text or "www." in norm_text:
+        store_memory(raw_text, "link")
+        await bot.send_message(chat_id, "Link saved.")
         return {"ok": True}
 
-    # ---------- NORMAL CHAT ----------
+    # ---------- DEFAULT CHAT ----------
     await bot.send_message(
         chat_id,
-        "I can remember notes, set reminders, and recall past info. Just tell me naturally."
+        "I’ve got it. I can store memories, recall past events with dates, and keep links or notes. Just tell me naturally."
     )
     return {"ok": True}
