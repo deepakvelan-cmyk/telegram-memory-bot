@@ -20,10 +20,11 @@ app = FastAPI()
 
 # ================= EMBEDDINGS =================
 def embed(text: str):
-    return client.embeddings.create(
+    res = client.embeddings.create(
         model="text-embedding-3-small",
         input=text
-    ).data[0].embedding
+    )
+    return res.data[0].embedding
 
 # ================= MEMORY SEARCH =================
 def search_memory(text: str):
@@ -39,7 +40,7 @@ def search_memory(text: str):
         ).execute()
         return res.data or []
     except Exception as e:
-        print("Memory search error:", e)
+        print("memory search error:", e)
         return []
 
 # ================= DATE / TIME =================
@@ -54,12 +55,11 @@ def handle_date_time(text: str):
 # ================= INTENT =================
 def is_past_question(text: str):
     t = text.lower()
-    return any(x in t for x in [
+    return any(w in t for w in [
         "when", "what", "did i",
-        "car", "battery", "issue", "problem",
+        "car", "battery", "issue",
         "movie", "went", "faced"
     ])
-
 
 def is_pending_query(text: str):
     t = text.lower()
@@ -70,20 +70,24 @@ def is_reminder(text: str):
 
 def is_agenda(text: str):
     t = text.lower()
-    return any(x in t for x in ["today", "tomorrow", "after", "tonight", "focus on"]) and "remind" not in t
+    return any(w in t for w in [
+        "today", "tomorrow", "after", "tonight", "focus on"
+    ]) and "remind" not in t
 
 # ================= AI ANSWER =================
 def ai_answer(user_text: str, memories: list):
-    memory_context = "\n".join(f"- {m['content']}" for m in memories)
+    memory_context = "\n".join(
+        f"- {m['content']}" for m in memories
+    )
 
     system_prompt = f"""
 You are a personal AI assistant with memory.
 
 RULES:
-- You DO have memory.
+- You do have memory.
 - If memory exists, use it.
-- If nothing is found, say: "I don’t see a matching record yet, but I may have related notes."
 - Never say you have no memory.
+- If nothing matches, say: "I don’t see a matching record yet."
 
 MEMORY:
 {memory_context if memory_context else "No matching memory found"}
@@ -113,15 +117,18 @@ async def webhook(request: Request):
 
     text = text.strip()
 
-    # 1. Date / time fast path
+    # 1. Date / time
     quick = handle_date_time(text)
     if quick:
         await bot.send_message(chat_id, quick)
         return {"ok": True}
 
-    # 2. Pending check (no embeddings)
+    # 2. Pending check
     if is_pending_query(text):
-        await bot.send_message(chat_id, "You don’t have any pending reminders or tasks right now.")
+        await bot.send_message(
+            chat_id,
+            "You don’t have any pending reminders or tasks right now."
+        )
         return {"ok": True}
 
     # 3. Agenda
@@ -131,6 +138,7 @@ async def webhook(request: Request):
             "category": "work_antler",
             "embedding": embed(text)
         }).execute()
+
         await bot.send_message(chat_id, "Got it. I’ve noted this.")
         return {"ok": True}
 
@@ -141,29 +149,29 @@ async def webhook(request: Request):
             "category": "reminder",
             "embedding": embed(text)
         }).execute()
+
         await bot.send_message(chat_id, "Reminder saved.")
         return {"ok": True}
 
-    # 5. Past memory recall
+    # 5. Memory recall
     memories = []
     if is_past_question(text):
         memories = search_memory(text)
 
     reply = ai_answer(text, memories)
 
-    # 6. # 6️⃣ ALWAYS store personal facts
-fact_triggers = [
-    "i had", "i have", "i faced", "i went", "i did",
-    "my car", "battery", "issue", "problem", "movie"
-]
+    # 6. Always store personal facts
+    fact_triggers = [
+        "i had", "i have", "i faced", "i went",
+        "my car", "battery", "issue", "movie"
+    ]
 
-if any(t in text.lower() for t in fact_triggers):
-    supabase.table("memories").insert({
-        "content": text,
-        "category": "personal_fact",
-        "embedding": embed(text)
-    }).execute()
-)
+    if any(t in text.lower() for t in fact_triggers):
+        supabase.table("memories").insert({
+            "content": text,
+            "category": "personal_fact",
+            "embedding": embed(text)
+        }).execute()
 
     await bot.send_message(chat_id, reply)
     return {"ok": True}
