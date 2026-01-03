@@ -1,100 +1,114 @@
 import os
-import re
 from fastapi import FastAPI, Request
 from telegram import Bot
 from supabase import create_client
 from openai import OpenAI
 
-# ================== CONFIG ==================
+# ---------- ENV ----------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# ---------- CLIENTS ----------
 bot = Bot(token=TELEGRAM_TOKEN)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
-# ================== RULE SET ==================
-HIGH_PRIORITY_NAMES = {"nirbhay", "ns"}
-
-SENSITIVE_KEYWORDS = {
-    "dimpu", "dimple", "santoshi", "anudeep",
-    "bala", "niva", "dad",
-    "pill", "pills", "medicine", "tablet", "vitamins"
-}
-
-WORK_KEYWORDS = {
-    "signup", "onboarding", "antler", "void check",
-    "vaayu", "vaayu scrubs", "client", "meeting",
-    "design", "website", "churn", "churned",
-    "call", "follow up", "review", "deployment"
-}
-
-TASK_TRIGGERS = {
-    "remember", "remind", "need to", "have to",
-    "must", "pay", "renew", "follow up", "call"
-}
-
-URL_PATTERN = re.compile(r"https?://\S+|www\.\S+")
-
-# ================== HELPERS ==================
+# ---------- EMBEDDINGS ----------
 def embed(text: str):
-    response = client.embeddings.create(
+    res = client.embeddings.create(
         model="text-embedding-3-small",
         input=text
     )
-    return response.data[0].embedding
+    return res.data[0].embedding
 
 
-def categorize(text: str):
-    t = text.lower()
-
-    # Priority (hard rule)
-    priority = "high" if any(n in t for n in HIGH_PRIORITY_NAMES) else "normal"
-
-    # Domain (hard → soft)
-    if any(k in t for k in SENSITIVE_KEYWORDS):
-        domain = "sensitive"
-    elif any(k in t for k in WORK_KEYWORDS):
-        domain = "work"
-    else:
-        domain = "personal"
-
-    # Type
-    if any(k in t for k in TASK_TRIGGERS):
-        record_type = "task"
-    else:
-        record_type = "memory"
-
-    # Links override type
-    links = URL_PATTERN.findall(text)
-    if links:
-        record_type = "link"
-
-    return {
-        "domain": domain,
-        "priority": priority,
-        "type": record_type,
-        "links": links
-    }
+# ---------- MEMORY SEARCH ----------
+def search_memory(text: str):
+    try:
+        emb = embed(text)
+        result = supabase.rpc(
+            "match_memories",
+            {
+                "query_embedding": emb,
+                "match_threshold": 0.65,
+                "match_count": 6
+            }
+        ).execute()
+        return result.data or []
+    except Exception:
+        return []
 
 
-def search_memory(query_embedding):
-    result = supabase.rpc(
-        "match_memories",
-        {
-            "query_embedding": query_embedding,
-            "match_threshold": 0.75,
-            "match_count": 5
-        }
-    ).execute()
-    return result.data or []
+# ---------- AI BRAIN ----------
+def ai_think(user_text: str, memories: list):
+    memory_context = "\n".join(
+        f"- {m['content']} (category: {m['category']})"
+        for m in memories
+    )
+
+    system_prompt = f"""
+You are a personal AI assistant for ONE user.
+
+You are their only assistant.
+You remember things over time and evolve as memories grow.
+
+You must:
+- Answer questions naturally (date, time, advice, reminders)
+- Use memories when helpful, but do NOT depend on them
+- Decide if something is worth remembering
+- Decide a category if storing (personal, work, reminder, high_priority, link, general)
+- Be calm, concise, and human
+
+If something is just a question, do NOT store it.
+If something is an event, reminder, decision, or task, store it.
+
+Relevant past memories (may be empty):
+{memory_context if memory_context else "None"}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text}
+        ],
+        temperature=0.4
+    )
+
+    content = response.choices[0].message.content.strip()
+
+    """
+    Expected AI format (strict):
+
+    REPLY:
+    <what to say to user>
+
+    STORE: yes/no
+    CATEGORY: <category>
+    """
+
+    reply = content
+    store = False
+    category = "general"
+
+    if "STORE:" in content:
+        parts = content.split("STORE:")
+        reply = parts[0].replace("REPLY:", "").strip()
+
+        store_line = parts[1].strip().lower()
+        store = store_line.startswith("yes")
+
+        if "CATEGORY:" in store_line:
+            category = store_line.split("category:")[1].strip()
+
+    return reply, store, category
 
 
-# ================== WEBHOOK ==================
+# ---------- WEBHOOK ----------
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     data = await request.json()
@@ -108,46 +122,29 @@ async def telegram_webhook(request: Request):
 
     text = text.strip()
 
-    # ---------- QUESTIONS (search) ----------
-    if "?" in text.lower():
+    # 1️⃣ Fetch memories (context only)
+    memories = search_memory(text)
+
+    # 2️⃣ AI thinks
+    try:
+        reply, should_store, category = ai_think(text, memories)
+    except Exception as e:
+        print("AI error:", e)
+        await bot.send_message(chat_id=chat_id, text="I’m thinking, but something went wrong.")
+        return {"ok": True}
+
+    # 3️⃣ Store if AI decides
+    if should_store:
         try:
             emb = embed(text)
-            memories = search_memory(emb)
-
-            if not memories:
-                reply = "I don’t have anything relevant yet."
-            else:
-                lines = [f"- {m['content']}" for m in memories]
-                reply = "Here’s what I found:\n" + "\n".join(lines)
-
+            supabase.table("memories").insert({
+                "content": text,
+                "category": category,
+                "embedding": emb
+            }).execute()
         except Exception as e:
-            print("Search error:", e)
-            reply = "I’m running, but my AI quota is temporarily unavailable."
+            print("Memory insert error:", e)
 
-    # ---------- STORAGE ----------
-    else:
-        if len(text) < 6:
-            reply = "Hey 🙂 I’m here."
-        else:
-            try:
-                meta = categorize(text)
-                emb = embed(text)
-
-                supabase.table("memories").insert({
-                    "content": text,
-                    "domain": meta["domain"],
-                    "priority": meta["priority"],
-                    "type": meta["type"],
-                    "links": meta["links"],
-                    "status": "open" if meta["type"] == "task" else None,
-                    "embedding": emb
-                }).execute()
-
-                reply = "Got it — I’ll remember that."
-
-            except Exception as e:
-                print("Insert error:", e)
-                reply = "I couldn’t save that right now, but I’m still here."
-
+    # 4️⃣ Reply
     await bot.send_message(chat_id=chat_id, text=reply)
     return {"ok": True}
