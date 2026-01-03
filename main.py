@@ -38,7 +38,8 @@ def search_memory(text: str):
             }
         ).execute()
         return res.data or []
-    except:
+    except Exception as e:
+        print("Memory search error:", e)
         return []
 
 # ================= DATE / TIME =================
@@ -51,16 +52,9 @@ def handle_date_time(text: str):
     return None
 
 # ================= INTENT =================
-def is_past_fact_question(text: str):
+def is_past_question(text: str):
     t = text.lower()
-    return (
-        "when" in t
-        or "what" in t
-        or "did i" in t
-        or "went" in t
-        or "had" in t
-        or "issue" in t
-    )
+    return any(x in t for x in ["when", "what", "did i", "went", "had", "issue"])
 
 def is_pending_query(text: str):
     t = text.lower()
@@ -78,13 +72,13 @@ def ai_answer(user_text: str, memories: list):
     memory_context = "\n".join(f"- {m['content']}" for m in memories)
 
     system_prompt = f"""
-You are a personal AI assistant with persistent memory.
+You are a personal AI assistant with memory.
 
-ABSOLUTE RULES:
+RULES:
 - You DO have memory.
-- If memory context exists, you MUST use it.
-- You are NOT allowed to say you have no memory.
-- If nothing is found, say "I don’t find anything recorded yet."
+- If memory exists, use it.
+- If nothing is found, say: "I don’t find anything recorded yet."
+- Never say you have no memory.
 
 MEMORY:
 {memory_context if memory_context else "No matching memory found"}
@@ -114,53 +108,50 @@ async def webhook(request: Request):
 
     text = text.strip()
 
-    # Fast date/time
+    # 1. Date / time fast path
     quick = handle_date_time(text)
     if quick:
         await bot.send_message(chat_id, quick)
         return {"ok": True}
 
-    # Pending check (STATE, NOT MEMORY)
+    # 2. Pending check (no embeddings)
     if is_pending_query(text):
         await bot.send_message(chat_id, "You don’t have any pending reminders or tasks right now.")
         return {"ok": True}
 
-    # Agenda
+    # 3. Agenda
     if is_agenda(text):
         supabase.table("memories").insert({
             "content": text,
             "category": "work_antler",
-            "embedding": embed(text),
-            "is_override": False
+            "embedding": embed(text)
         }).execute()
         await bot.send_message(chat_id, "Got it. I’ve noted this.")
         return {"ok": True}
 
-    # Reminder
+    # 4. Reminder
     if is_reminder(text):
         supabase.table("memories").insert({
             "content": text,
             "category": "reminder",
-            "embedding": embed(text),
-            "is_override": False
+            "embedding": embed(text)
         }).execute()
         await bot.send_message(chat_id, "Reminder saved.")
         return {"ok": True}
 
-    # Past fact recall
+    # 5. Past memory recall
     memories = []
-    if is_past_fact_question(text):
+    if is_past_question(text):
         memories = search_memory(text)
 
     reply = ai_answer(text, memories)
 
-    # Store declarative facts
-    if not is_past_fact_question(text):
+    # 6. Store declarative statements (facts)
+    if not is_past_question(text):
         supabase.table("memories").insert({
             "content": text,
             "category": "general",
-            "embedding": embed(text),
-            "is_override": False
+            "embedding": embed(text)
         }).execute()
 
     await bot.send_message(chat_id, reply)
