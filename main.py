@@ -5,20 +5,20 @@ from telegram import Bot
 from supabase import create_client
 from openai import OpenAI
 
-# ---------------- ENV ----------------
+# ================= ENV =================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# ---------------- CLIENTS ----------------
+# ================= CLIENTS =================
 bot = Bot(token=TELEGRAM_TOKEN)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
-# ---------------- EMBEDDINGS ----------------
+# ================= EMBEDDINGS =================
 def embed(text: str):
     res = client.embeddings.create(
         model="text-embedding-3-small",
@@ -26,7 +26,7 @@ def embed(text: str):
     )
     return res.data[0].embedding
 
-# ---------------- MEMORY SEARCH ----------------
+# ================= MEMORY SEARCH =================
 def search_memory(text: str):
     try:
         emb = embed(text)
@@ -42,7 +42,7 @@ def search_memory(text: str):
     except Exception:
         return []
 
-# ---------------- DATE / TIME ----------------
+# ================= DATE / TIME =================
 def handle_date_time(text: str):
     t = text.lower()
 
@@ -54,7 +54,7 @@ def handle_date_time(text: str):
 
     return None
 
-# ---------------- AI DECISION BRAIN ----------------
+# ================= AI DECISION BRAIN =================
 def ai_decide(user_text: str, memories: list):
     memory_context = "\n".join(
         f"- {m['content']} (category: {m.get('category','general')})"
@@ -64,7 +64,13 @@ def ai_decide(user_text: str, memories: list):
     system_prompt = f"""
 You are the ONLY AI assistant for one person.
 
-You think, decide, remember, and evolve.
+You are their memory, planner, and brain.
+
+CRITICAL RULES:
+- If relevant memory exists, YOU MUST answer using it
+- You are NOT allowed to say "I don't know" when memory exists
+- Questions like "when", "what", "did I", "any pending", "last time" MUST use memory
+- Memory overrides guessing
 
 STRICT CATEGORIES:
 - high_priority
@@ -74,16 +80,15 @@ STRICT CATEGORIES:
 - link
 - general
 
-RULES:
+CATEGORY RULES:
 • Nirbhay, NS → high_priority
 • Dimpu, Dimple, Santoshi, Anudeep, Bala, Niva, Dad, pills, medicine → personal_secure
 • signup, onboarding, antler, void check, vaayu scrubs, client, meeting, design, website, churn → work_antler
 • URLs → link
-• Any future intent → reminder
+• Any future intent or reminder → reminder
 • Questions alone → do NOT store
 • Events, reminders, tasks → store
-• Never refuse storing reminders
-• Be human and concise
+• NEVER refuse storing reminders
 
 PAST MEMORY CONTEXT:
 {memory_context if memory_context else "None"}
@@ -121,7 +126,7 @@ CATEGORY: <one category>
 
     return reply, store, category
 
-# ---------------- WEBHOOK ----------------
+# ================= WEBHOOK =================
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     data = await request.json()
@@ -140,10 +145,18 @@ async def telegram_webhook(request: Request):
         await bot.send_message(chat_id=chat_id, text=quick)
         return {"ok": True}
 
-    # 2️⃣ Memory context
+    # 2️⃣ Fetch memories
     memories = search_memory(text)
 
-    # 3️⃣ AI decision
+    # 3️⃣ HARD MEMORY RECALL (NO AI ALLOWED TO IGNORE)
+    recall_triggers = ["when", "what", "which", "did i", "last", "any pending", "pendings"]
+    if memories and any(t in text.lower() for t in recall_triggers):
+        reply = "Here’s what I remember:\n\n"
+        reply += "\n".join(f"- {m['content']}" for m in memories)
+        await bot.send_message(chat_id=chat_id, text=reply)
+        return {"ok": True}
+
+    # 4️⃣ AI decision
     try:
         reply, should_store, category = ai_decide(text, memories)
     except Exception as e:
@@ -151,7 +164,7 @@ async def telegram_webhook(request: Request):
         await bot.send_message(chat_id=chat_id, text="Something slipped. Try again.")
         return {"ok": True}
 
-    # 4️⃣ Store memory if decided
+    # 5️⃣ Store memory
     if should_store:
         try:
             emb = embed(text)
@@ -163,6 +176,6 @@ async def telegram_webhook(request: Request):
         except Exception as e:
             print("DB insert error:", e)
 
-    # 5️⃣ Reply
+    # 6️⃣ Reply
     await bot.send_message(chat_id=chat_id, text=reply)
     return {"ok": True}
