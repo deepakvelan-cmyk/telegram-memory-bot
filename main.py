@@ -94,16 +94,16 @@ def extract_last_n(text: str):
     return int(m.group(1)) if m else None
 
 # ================= STORAGE =================
-def store_memory(raw_text: str, category: str):
-    supabase.table("memories").insert({
-        "raw_text": raw_text,
-        "normalized_text": normalize(raw_text),
-        "category": category,
-        "timestamp_utc": now_utc().isoformat(),
-        "timestamp_human": now_ist_human(),
-        "embedding": embed(raw_text),
-        "metadata": {}
-    }).execute()
+supabase.table("memories").insert({
+    "content": raw_text,                 # 🔑 REQUIRED FOR OLD SCHEMA
+    "raw_text": raw_text,
+    "normalized_text": normalize(raw_text),
+    "category": category,
+    "timestamp_utc": now_utc().isoformat(),
+    "timestamp_human": now_ist_human(),
+    "embedding": embed(raw_text),
+    "metadata": {}
+}).execute()
 
 # ================= RECALL =================
 def recall_memories(query: str, limit: int | None = None):
