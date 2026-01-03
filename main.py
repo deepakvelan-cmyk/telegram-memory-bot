@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from fastapi import FastAPI, Request
 from telegram import Bot
 from supabase import create_client
@@ -25,7 +26,6 @@ def embed(text: str):
     )
     return res.data[0].embedding
 
-
 # ---------- MEMORY SEARCH ----------
 def search_memory(text: str):
     try:
@@ -39,34 +39,48 @@ def search_memory(text: str):
             }
         ).execute()
         return result.data or []
-    except Exception:
+    except Exception as e:
+        print("Search error:", e)
         return []
 
+# ---------- DATE / TIME (HARD RULE, NO AI) ----------
+def handle_date_time(text: str):
+    t = text.lower()
+
+    if "date" in t:
+        return datetime.now().strftime("Today's date is %B %d, %Y.")
+
+    if "time" in t or "now" in t:
+        return datetime.now().strftime("The current time is %I:%M %p.")
+
+    return None
 
 # ---------- AI BRAIN ----------
 def ai_think(user_text: str, memories: list):
     memory_context = "\n".join(
-        f"- {m['content']} (category: {m['category']})"
+        f"- {m['content']} (category: {m.get('category','general')})"
         for m in memories
     )
 
     system_prompt = f"""
 You are a personal AI assistant for ONE user.
 
-You are their only assistant.
-You remember things over time and evolve as memories grow.
+Rules:
+- You can answer questions without storing
+- Decide if something should be remembered
+- Choose a category when storing
+- NEVER hallucinate dates or time
+- Be concise and human
 
-You must:
-- Answer questions naturally (date, time, advice, reminders)
-- Use memories when helpful, but do NOT depend on them
-- Decide if something is worth remembering
-- Decide a category if storing (personal, work, reminder, high_priority, link, general)
-- Be calm, concise, and human
+If storing, follow this exact format:
 
-If something is just a question, do NOT store it.
-If something is an event, reminder, decision, or task, store it.
+REPLY:
+<message>
 
-Relevant past memories (may be empty):
+STORE: yes/no
+CATEGORY: <category>
+
+Past memories:
 {memory_context if memory_context else "None"}
 """
 
@@ -81,32 +95,19 @@ Relevant past memories (may be empty):
 
     content = response.choices[0].message.content.strip()
 
-    """
-    Expected AI format (strict):
-
-    REPLY:
-    <what to say to user>
-
-    STORE: yes/no
-    CATEGORY: <category>
-    """
-
     reply = content
     store = False
     category = "general"
 
     if "STORE:" in content:
-        parts = content.split("STORE:")
-        reply = parts[0].replace("REPLY:", "").strip()
-
-        store_line = parts[1].strip().lower()
+        reply = content.split("STORE:")[0].replace("REPLY:", "").strip()
+        store_line = content.split("STORE:")[1].lower()
         store = store_line.startswith("yes")
 
-        if "CATEGORY:" in store_line:
+        if "category:" in store_line:
             category = store_line.split("category:")[1].strip()
 
     return reply, store, category
-
 
 # ---------- WEBHOOK ----------
 @app.post("/webhook")
@@ -122,18 +123,24 @@ async def telegram_webhook(request: Request):
 
     text = text.strip()
 
-    # 1️⃣ Fetch memories (context only)
+    # 1️⃣ Date / Time (no AI)
+    date_reply = handle_date_time(text)
+    if date_reply:
+        await bot.send_message(chat_id=chat_id, text=date_reply)
+        return {"ok": True}
+
+    # 2️⃣ Memory context
     memories = search_memory(text)
 
-    # 2️⃣ AI thinks
+    # 3️⃣ AI reasoning
     try:
         reply, should_store, category = ai_think(text, memories)
     except Exception as e:
         print("AI error:", e)
-        await bot.send_message(chat_id=chat_id, text="I’m thinking, but something went wrong.")
+        await bot.send_message(chat_id=chat_id, text="Something went wrong while thinking.")
         return {"ok": True}
 
-    # 3️⃣ Store if AI decides
+    # 4️⃣ Store memory if needed
     if should_store:
         try:
             emb = embed(text)
@@ -143,8 +150,8 @@ async def telegram_webhook(request: Request):
                 "embedding": emb
             }).execute()
         except Exception as e:
-            print("Memory insert error:", e)
+            print("Insert error:", e)
 
-    # 4️⃣ Reply
+    # 5️⃣ Reply
     await bot.send_message(chat_id=chat_id, text=reply)
     return {"ok": True}
