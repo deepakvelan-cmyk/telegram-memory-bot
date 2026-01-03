@@ -35,7 +35,7 @@ def search_memory(text: str):
             {
                 "query_embedding": emb,
                 "match_threshold": 0.6,
-                "match_count": 5
+                "match_count": 6
             }
         ).execute()
         return res.data or []
@@ -52,39 +52,51 @@ def handle_date_time(text: str):
         return datetime.now().strftime("The current time is %I:%M %p.")
     return None
 
-# ================= INTENT =================
-def is_past_question(text: str):
-    t = text.lower()
-    return any(w in t for w in [
-        "when", "what", "did i",
-        "car", "battery", "issue",
-        "movie", "went", "faced"
-    ])
+# ================= UNIVERSAL INTENT PARSER =================
+def parse_intent(text: str):
+    t = text.lower().strip()
 
-def is_pending_query(text: str):
-    t = text.lower()
-    return "pending" in t or "tasks" in t or "reminder" in t
+    intent = {
+        "type": "chat",     # chat | recall | reminder | agenda | pending
+        "entity": None
+    }
 
-def is_reminder(text: str):
-    return "remind me" in text.lower()
+    if any(x in t for x in [
+        "remind me", "add reminder", "set reminder", "add a reminder"
+    ]):
+        intent["type"] = "reminder"
 
-def is_agenda(text: str):
-    t = text.lower()
-    return any(w in t for w in [
-        "today", "tomorrow", "after", "tonight", "focus on"
-    ]) and "remind" not in t
+    elif any(x in t for x in [
+        "any pending", "pending tasks", "pending reminders", "what's pending"
+    ]):
+        intent["type"] = "pending"
+
+    elif any(x in t for x in [
+        "today", "tomorrow", "tonight", "after", "focus on", "i have to"
+    ]) and "remind" not in t:
+        intent["type"] = "agenda"
+
+    elif any(x in t for x in [
+        "when", "what", "did i", "tell me", "anything",
+        "regarding", "about", "notes"
+    ]):
+        intent["type"] = "recall"
+
+    words = [w for w in t.split() if len(w) > 2]
+    if words:
+        intent["entity"] = words[-1]
+
+    return intent
 
 # ================= AI ANSWER =================
 def ai_answer(user_text: str, memories: list):
-    memory_context = "\n".join(
-        f"- {m['content']}" for m in memories
-    )
+    memory_context = "\n".join(f"- {m['content']}" for m in memories)
 
     system_prompt = f"""
-You are a personal AI assistant with memory.
+You are a personal AI assistant with persistent memory.
 
 RULES:
-- You do have memory.
+- You DO have memory.
 - If memory exists, use it.
 - Never say you have no memory.
 - If nothing matches, say: "I don’t see a matching record yet."
@@ -117,59 +129,59 @@ async def webhook(request: Request):
 
     text = text.strip()
 
-    # 1. Date / time
+    # 1️⃣ Fast date / time
     quick = handle_date_time(text)
     if quick:
         await bot.send_message(chat_id, quick)
         return {"ok": True}
 
-    # 2. Pending check
-    if is_pending_query(text):
+    intent = parse_intent(text)
+
+    # 2️⃣ Pending
+    if intent["type"] == "pending":
         await bot.send_message(
             chat_id,
             "You don’t have any pending reminders or tasks right now."
         )
         return {"ok": True}
 
-    # 3. Agenda
-    if is_agenda(text):
-        supabase.table("memories").insert({
-            "content": text,
-            "category": "work_antler",
-            "embedding": embed(text)
-        }).execute()
-
-        await bot.send_message(chat_id, "Got it. I’ve noted this.")
-        return {"ok": True}
-
-    # 4. Reminder
-    if is_reminder(text):
+    # 3️⃣ Reminder
+    if intent["type"] == "reminder":
         supabase.table("memories").insert({
             "content": text,
             "category": "reminder",
             "embedding": embed(text)
         }).execute()
 
-        await bot.send_message(chat_id, "Reminder saved.")
+        await bot.send_message(chat_id, "Reminder added.")
         return {"ok": True}
 
-    # 5. Memory recall
+    # 4️⃣ Agenda / Notes
+    if intent["type"] == "agenda":
+        supabase.table("memories").insert({
+            "content": text,
+            "category": "agenda",
+            "embedding": embed(text)
+        }).execute()
+
+        await bot.send_message(chat_id, "Noted.")
+        return {"ok": True}
+
+    # 5️⃣ Recall
     memories = []
-    if is_past_question(text):
+    if intent["type"] == "recall":
         memories = search_memory(text)
 
     reply = ai_answer(text, memories)
 
-    # 6. Always store personal facts
-    fact_triggers = [
-        "i had", "i have", "i faced", "i went",
-        "my car", "battery", "issue", "movie"
-    ]
-
-    if any(t in text.lower() for t in fact_triggers):
+    # 6️⃣ Always store personal facts
+    if any(x in text.lower() for x in [
+        "i had", "i have", "i went", "i faced", "i did",
+        "issue", "problem"
+    ]):
         supabase.table("memories").insert({
             "content": text,
-            "category": "personal_fact",
+            "category": "fact",
             "embedding": embed(text)
         }).execute()
 
