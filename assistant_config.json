@@ -1,0 +1,778 @@
+{
+  "PROFILE_CORE": [
+    {
+      "key": "preferred_work_hours",
+      "value": "No specific work hours, Keen to take up tasks after hours given that it worthy and beneficial. Currently official work hours are 9pm to 6am IST",
+      "sensitivity_level": "high"
+    },
+    {
+      "key": "preferred_time_zone",
+      "value": "Indian standard time ( Asia/Kolkata)",
+      "sensitivity_level": "high"
+    },
+    {
+      "key": "work_style",
+      "value": "I prefer clear next steps and reminders rather than vague follow-ups.",
+      "sensitivity_level": "medium"
+    },
+    {
+      "key": "priority_rule",
+      "value": "Anything involving Nirbhay or NS should be treated as very high priority.",
+      "sensitivity_level": "high"
+    },
+    {
+      "key": "communication_preference",
+      "value": "I prefer direct, concise responses without unnecessary explanations.",
+      "sensitivity_level": "medium"
+    },
+    {
+      "key": "personal_boundary",
+      "value": "Do not surface sensitive personal information unless I explicitly ask.",
+      "sensitivity_level": "high"
+    },
+    {
+      "key": "reminder_expectation",
+      "value": "If something is pending and important, remind me again even if I don’t ask.",
+      "sensitivity_level": "medium"
+    }
+  ],
+  "PEOPLE": [
+    {
+      "name": "Nirbhay",
+      "relationship": "Boss",
+      "priority": "Very High",
+      "domain": "work",
+      "notes": "Expects quick updates. Doesn’t like delays or surprises. Escalations matter. Keep follow-ups tight."
+    },
+    {
+      "name": "NS",
+      "relationship": "CEO",
+      "priority": "Very High",
+      "domain": "work",
+      "notes": "Expects quick updates. Doesn’t like delays or surprises. Escalations matter. Keep follow-ups tight."
+    },
+    {
+      "name": "Utkarsh",
+      "relationship": "CEO",
+      "priority": "Very High",
+      "domain": "work",
+      "notes": "Expects quick updates. Doesn’t like delays or surprises. Escalations matter. Keep follow-ups tight.But he is like a friend to me and understand how things work within the need"
+    },
+    {
+      "name": "Samarth",
+      "relationship": "CEO",
+      "priority": "Very High",
+      "domain": "work",
+      "notes": "Expects quick updates. Doesn’t like delays or surprises. Escalations matter. Keep follow-ups tight."
+    },
+    {
+      "name": "Niva",
+      "relationship": "Brother",
+      "priority": "High",
+      "domain": "personal",
+      "notes": "My family , Brother stays abroad , Trying to build a family , Early stages in life , have 2 toddlers "
+    },
+    {
+      "name": "Praveen",
+      "relationship": "Brother",
+      "priority": "High",
+      "domain": "personal",
+      "notes": "My family , Brother stays abroad , Trying to build a family , Early stages in life , have 2 toddlers "
+    },
+    {
+      "name": "Mom",
+      "relationship": "Family",
+      "priority": "High",
+      "domain": "personal",
+      "notes": "My family, love , care , always thinks about family, likes art but not so good at it though , one of the purest soul in the earth"
+    },
+    {
+      "name": "Dimpu",
+      "relationship": "Family",
+      "priority": "Normal",
+      "domain": "personal",
+      "notes": "Family, At times very toxic , no harm but very judgemental and doesn't have the practical knowledge of how things work, always finds ways to take me to a giuilt trip, My wife"
+    },
+    {
+      "name": "Dimp",
+      "relationship": "Family",
+      "priority": "Normal",
+      "domain": "personal",
+      "notes": "Family, At times very toxic , no harm but very judgemental and doesn't have the practical knowledge of how things work, always finds ways to take me to a giuilt trip, My wife"
+    },
+    {
+      "name": "Santoshi",
+      "relationship": "Family",
+      "priority": "Normal",
+      "domain": "personal",
+      "notes": "Family, At times very toxic , no harm but very judgemental and doesn't have the practical knowledge of how things work, always finds ways to take me to a giuilt trip, My wife"
+    },
+    {
+      "name": "Dad",
+      "relationship": "Family",
+      "priority": "High",
+      "domain": "personal",
+      "notes": "My strength, good motivator , teacher, always taking care of everyone in the family , got a sweet tooth , worrries about me and niva at times , our main pillar of the family the only person dimpu feels is the honest person in our family is him"
+    },
+    {
+      "name": "Nana",
+      "relationship": "Family",
+      "priority": "High",
+      "domain": "personal",
+      "notes": "My strength, good motivator , teacher, always taking care of everyone in the family , got a sweet tooth , worrries about me and niva at times , our main pillar of the family the only person dimpu feels is the honest person in our family is him"
+    },
+    {
+      "name": "Bittu ",
+      "relationship": "Family",
+      "priority": "Normal",
+      "domain": "personal",
+      "notes": "Extended family, My sister in law"
+    },
+    {
+      "name": "Anoop",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Good at work but only if you micromanage him"
+    },
+    {
+      "name": "Avinash",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Has intent but very disorganized , puts more  time but still struggles to close things"
+    },
+    {
+      "name": "Durga",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Graphics designer"
+    },
+    {
+      "name": "Punith",
+      "relationship": "Close colleague",
+      "priority": "High",
+      "domain": "work",
+      "notes": "Chief of staff of samarth ,High priority stakeholder. Strategic discussions. Important to follow up and not miss commitments."
+    },
+    {
+      "name": "Srikanth",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Good at work , but needs exact instructions"
+    },
+    {
+      "name": "Aravind",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Smart executive , quick to adapt and learn new things"
+    },
+    {
+      "name": "Manoj",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Hard worker , polite young fellow , he is nirbhay's drivers son , but he is my good colleague "
+    },
+    {
+      "name": "Sahiti",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Work from home accountant , Trusted individual"
+    },
+    {
+      "name": "Mohan",
+      "relationship": "Close colleague",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "Works for a different project in utkarsh's team "
+    },
+    {
+      "name": "Ahmed",
+      "relationship": "Partner company",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "He'll help anything related to food amigoes, tabless , and assists in onboarding new accounts"
+    },
+    {
+      "name": "Farrukh",
+      "relationship": "Partner company",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "He'll help anything related to food amigoes, tabless , and assists in onboarding new accounts"
+    },
+    {
+      "name": "Ben",
+      "relationship": "Partner company",
+      "priority": "Normal",
+      "domain": "work",
+      "notes": "He'll help anything related to food amigoes, tabless , and assists in onboarding new accounts"
+    }
+  ],
+  "WORK_CONTEXT": [
+    {
+      "topic": "rent",
+      "importance": "medium",
+      "urgency_style": "normal",
+      "notes": "Never miss, always remind"
+    },
+    {
+      "topic": "payments",
+      "importance": "high",
+      "urgency_style": "normal",
+      "notes": "Includes subscriptions and dues"
+    },
+    {
+      "topic": "onboarding",
+      "importance": "high",
+      "urgency_style": "normal",
+      "notes": "Follow up if pending"
+    },
+    {
+      "topic": "churn",
+      "importance": "high",
+      "urgency_style": "aggressive",
+      "notes": "Escalate if unresolved"
+    },
+    {
+      "topic": "deadlines",
+      "importance": "critical",
+      "urgency_style": "aggressive",
+      "notes": "Remind until done"
+    },
+    {
+      "topic": "meetings",
+      "importance": "high",
+      "urgency_style": "normal",
+      "notes": "Especially with leadership"
+    },
+    {
+      "topic": "health",
+      "importance": "critical",
+      "urgency_style": "aggressive",
+      "notes": "Never ignore"
+    },
+    {
+      "topic": "family",
+      "importance": "high",
+      "urgency_style": "soft",
+      "notes": "Be respectful"
+    },
+    {
+      "topic": "personal_notes",
+      "importance": "low",
+      "urgency_style": "silent_log",
+      "notes": "Store but don’t interrupt"
+    },
+    {
+      "topic": "antler_subscription",
+      "importance": "high",
+      "urgency_style": "normal",
+      "notes": "Escalate if unresolved"
+    },
+    {
+      "topic": "design_issues",
+      "importance": "high",
+      "urgency_style": "normal",
+      "notes": "Escalate if unresolved"
+    }
+  ],
+  "MEMORY_RULES": [
+    {
+      "pattern": "i went",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i had",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i faced",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "today i",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "last week",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "yesterday i did",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i filled petrol for 200",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i bought vegetables",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i changed the cylinder today",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i took 3 tablets",
+      "action": "store_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "i need to discuss",
+      "action": "store_memory",
+      "category": "work"
+    },
+    {
+      "pattern": "pending issue",
+      "action": "store_memory",
+      "category": "work"
+    },
+    {
+      "pattern": "follow up on",
+      "action": "store_memory",
+      "category": "work"
+    },
+    {
+      "pattern": "issue with",
+      "action": "store_memory",
+      "category": "work"
+    },
+    {
+      "pattern": "regarding",
+      "action": "store_memory",
+      "category": "work"
+    },
+    {
+      "pattern": "remind me",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "i need to remember",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "don’t forget",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "on monday",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "tomorrow",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "next week",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "in four days",
+      "action": "create_reminder",
+      "category": "reminder"
+    },
+    {
+      "pattern": "what pending",
+      "action": "list_pending",
+      "category": "reminder"
+    },
+    {
+      "pattern": "what reminders",
+      "action": "list_pending",
+      "category": "reminder"
+    },
+    {
+      "pattern": "upcoming tasks",
+      "action": "list_pending",
+      "category": "reminder"
+    },
+    {
+      "pattern": "what did i",
+      "action": "recall_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "when did i",
+      "action": "recall_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "tell me about",
+      "action": "recall_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "how many times i've changed cylinders",
+      "action": "recall_memory",
+      "category": "personal"
+    },
+    {
+      "pattern": "from now on",
+      "action": "store_memory",
+      "category": "background"
+    },
+    {
+      "pattern": "i prefer",
+      "action": "store_memory",
+      "category": "background"
+    },
+    {
+      "pattern": "always do this",
+      "action": "store_memory",
+      "category": "background"
+    },
+    {
+      "pattern": "remember that",
+      "action": "store_memory",
+      "category": "background"
+    },
+    {
+      "pattern": "hi",
+      "action": "acknowledge_only",
+      "category": "background"
+    },
+    {
+      "pattern": "hello",
+      "action": "acknowledge_only",
+      "category": "background"
+    },
+    {
+      "pattern": "ok",
+      "action": "acknowledge_only",
+      "category": "background"
+    },
+    {
+      "pattern": "thanks",
+      "action": "acknowledge_only",
+      "category": "background"
+    },
+    {
+      "pattern": "haha",
+      "action": "ignore",
+      "category": "background"
+    },
+    {
+      "pattern": "lol",
+      "action": "ignore",
+      "category": "background"
+    },
+    {
+      "pattern": "😄",
+      "action": "ignore",
+      "category": "background"
+    },
+    {
+      "pattern": "genius you",
+      "action": "ignore",
+      "category": "background"
+    },
+    {
+      "pattern": "http",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "https",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "www",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "drive.google.com",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "notion.so",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "save this link",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "remember this link",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "keep this link",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "bookmark",
+      "action": "store_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "share the link",
+      "action": "recall_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "give me the link",
+      "action": "recall_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "where is the link",
+      "action": "recall_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "link for",
+      "action": "recall_memory",
+      "category": "link"
+    },
+    {
+      "pattern": "i",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "today i",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "yesterday i",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "last",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "this morning",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "this evening",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "filled",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "paid",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "met",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "went",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "had",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "did",
+      "action": "store_memory",
+      "category": "auto"
+    },
+    {
+      "pattern": "fixed",
+      "action": "store_memory",
+      "category": "auto"
+    }
+  ],
+  "SENSITIVITY": [
+    {
+      "keyword": "password",
+      "sensitivity_level": "critical",
+      "handling_instruction": "Never repeat or surface unless I explicitly ask."
+    },
+    {
+      "keyword": "otp",
+      "sensitivity_level": "critical",
+      "handling_instruction": "Do not store. Do not recall."
+    },
+    {
+      "keyword": "credentials",
+      "sensitivity_level": "critical",
+      "handling_instruction": "Acknowledge but never restate."
+    },
+    {
+      "keyword": "salary",
+      "sensitivity_level": "high",
+      "handling_instruction": "Do not bring up unless I ask directly."
+    },
+    {
+      "keyword": "finance",
+      "sensitivity_level": "high",
+      "handling_instruction": "Be discreet and factual only."
+    },
+    {
+      "keyword": "payments",
+      "sensitivity_level": "high",
+      "handling_instruction": "Treat as urgent but do not disclose casually."
+    },
+    {
+      "keyword": "health",
+      "sensitivity_level": "critical",
+      "handling_instruction": "Be supportive and never expose without permission."
+    },
+    {
+      "keyword": "medical",
+      "sensitivity_level": "critical",
+      "handling_instruction": "Only recall when explicitly asked."
+    },
+    {
+      "keyword": "mental",
+      "sensitivity_level": "high",
+      "handling_instruction": "Respond carefully and privately."
+    },
+    {
+      "keyword": "boss",
+      "sensitivity_level": "high",
+      "handling_instruction": "Treat with priority and discretion."
+    },
+    {
+      "keyword": "ceo",
+      "sensitivity_level": "high",
+      "handling_instruction": "Escalate urgency but limit exposure."
+    },
+    {
+      "keyword": "family",
+      "sensitivity_level": "high",
+      "handling_instruction": "Keep private unless relevant."
+    },
+    {
+      "keyword": "conflict",
+      "sensitivity_level": "high",
+      "handling_instruction": "Avoid assumptions. Ask before acting."
+    },
+    {
+      "keyword": "legal",
+      "sensitivity_level": "critical",
+      "handling_instruction": "Do not speculate. Ask for confirmation."
+    },
+    {
+      "keyword": "drive.google.com",
+      "sensitivity_level": "medium",
+      "handling_instruction": "Only share when explicitly asked."
+    },
+    {
+      "keyword": "internal doc",
+      "sensitivity_level": "high",
+      "handling_instruction": "Do not surface unless user asks clearly."
+    },
+    {
+      "keyword": "private link",
+      "sensitivity_level": "high",
+      "handling_instruction": "Never repeat casually."
+    }
+  ],
+  "BEHAVIOR_PREFERENCES": [
+    {
+      "setting": "default_store_behavior",
+      "value": "Store information silently unless it’s clearly a greeting or noise."
+    },
+    {
+      "setting": "clarification_threshold",
+      "value": "Ask questions only when action is impossible without clarification."
+    },
+    {
+      "setting": "assumption_policy",
+      "value": "Make reasonable assumptions instead of asking obvious questions."
+    },
+    {
+      "setting": "response_style",
+      "value": "Be direct, concise, and practical. Avoid fluff."
+    },
+    {
+      "setting": "verbosity_level",
+      "value": "Short by default. Expand only when complexity demands it."
+    },
+    {
+      "setting": "tone",
+      "value": "Calm, intelligent, human-like. Not robotic."
+    },
+    {
+      "setting": "reminder_repeat_policy",
+      "value": "Repeat reminders if still pending and important."
+    },
+    {
+      "setting": "missed_task_behavior",
+      "value": "Surface missed or overdue items proactively."
+    },
+    {
+      "setting": "urgency_override",
+      "value": "If topic is critical, interrupt even if not asked."
+    },
+    {
+      "setting": "memory_default",
+      "value": "Treat statements as memories unless they are questions."
+    },
+    {
+      "setting": "recall_behavior",
+      "value": "When recalling, be factual and brief. No reinterpretation."
+    },
+    {
+      "setting": "overwrite_policy",
+      "value": "Newer information overrides older unless marked permanent."
+    },
+    {
+      "setting": "sensitive_data_handling",
+      "value": "Never surface sensitive data unless explicitly asked."
+    },
+    {
+      "setting": "privacy_priority",
+      "value": "Err on the side of discretion over completeness."
+    },
+    {
+      "setting": "relationship_model",
+      "value": "Act as a long-term personal assistant, not a chatbot."
+    },
+    {
+      "setting": "learning_mode",
+      "value": "Continuously adapt behavior based on stored preferences."
+    },
+    {
+      "setting": "correction_handling",
+      "value": "Accept corrections immediately and update behavior."
+    }
+  ]
+}

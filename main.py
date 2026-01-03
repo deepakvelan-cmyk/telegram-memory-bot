@@ -15,6 +15,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+ASSISTANT_CONFIG_ENV = os.getenv("ASSISTANT_CONFIG_JSON")
+
 # ================= CLIENTS =================
 bot = Bot(token=TELEGRAM_TOKEN)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -22,9 +24,27 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
-# ================= LOAD CONFIG =================
-with open("assistant_config.json", "r") as f:
-    CONFIG = json.load(f)
+# ================= LOAD CONFIG (SAFE) =================
+def load_config():
+    # 1) Try environment variable (Render-safe)
+    if ASSISTANT_CONFIG_ENV:
+        return json.loads(ASSISTANT_CONFIG_ENV)
+
+    # 2) Try local file (dev-safe)
+    try:
+        with open("assistant_config.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # 3) Absolute minimal fallback (prevents crash)
+        return {
+            "MEMORY_RULES": [],
+            "PEOPLE": [],
+            "WORK_CONTEXT": [],
+            "SENSITIVITY": [],
+            "BEHAVIOR_PREFERENCES": []
+        }
+
+CONFIG = load_config()
 
 MEMORY_RULES = CONFIG.get("MEMORY_RULES", [])
 PEOPLE = CONFIG.get("PEOPLE", [])
@@ -54,24 +74,24 @@ def embed(text: str):
 # ================= RULE ENGINE =================
 def match_memory_rule(text: str):
     for rule in MEMORY_RULES:
-        if rule["pattern"].lower() in text:
-            return rule["action"], rule.get("category", "auto")
+        if rule.get("pattern", "").lower() in text:
+            return rule.get("action"), rule.get("category", "auto")
     return None, None
 
 def resolve_category(text: str):
     for p in PEOPLE:
-        if p["name"].lower() in text:
+        if p.get("name", "").lower() in text:
             return p.get("domain", "personal")
 
     for w in WORK_CONTEXT:
-        if w["topic"].lower() in text:
+        if w.get("topic", "").lower() in text:
             return "work"
 
     return "personal"
 
 def extract_last_n(text: str):
-    match = re.search(r"last\s+(\d+)", text)
-    return int(match.group(1)) if match else None
+    m = re.search(r"last\s+(\d+)", text)
+    return int(m.group(1)) if m else None
 
 # ================= STORAGE =================
 def store_memory(raw_text: str, category: str):
@@ -114,10 +134,9 @@ async def webhook(request: Request):
     raw_text = text.strip()
     norm_text = normalize(raw_text)
 
-    # ---------- RULE MATCH ----------
     action, rule_category = match_memory_rule(norm_text)
 
-    # ---------- RECALL (LAST N TIMES) ----------
+    # ---------- RECALL ----------
     if action == "recall_memory" or "last" in norm_text:
         n = extract_last_n(norm_text)
         memories = recall_memories(norm_text, n)
@@ -126,30 +145,30 @@ async def webhook(request: Request):
             await bot.send_message(chat_id, "I don’t have any record of that yet.")
             return {"ok": True}
 
-        response = []
-        for i, m in enumerate(memories, 1):
-            response.append(f"{i}. {m['timestamp_human']} – {m['raw_text']}")
+        lines = [
+            f"{i}. {m['timestamp_human']} – {m['raw_text']}"
+            for i, m in enumerate(memories, 1)
+        ]
 
-        await bot.send_message(chat_id, "\n".join(response))
+        await bot.send_message(chat_id, "\n".join(lines))
         return {"ok": True}
 
-    # ---------- STORE MEMORY ----------
+    # ---------- STORE ----------
     if action == "store_memory":
         category = resolve_category(norm_text) if rule_category == "auto" else rule_category
         store_memory(raw_text, category)
         await bot.send_message(chat_id, "Noted.")
         return {"ok": True}
 
-    # ---------- AUTO LINK STORAGE ----------
+    # ---------- AUTO LINK ----------
     if "http://" in norm_text or "https://" in norm_text or "www." in norm_text:
         store_memory(raw_text, "link")
         await bot.send_message(chat_id, "Link saved.")
         return {"ok": True}
 
-    # ---------- DEFAULT RESPONSE ----------
+    # ---------- DEFAULT ----------
     await bot.send_message(
         chat_id,
-        "I’m here. I can store memories, recall past events with dates, and keep links or notes."
+        "I’m here. I store memories with timestamps and can recall past events when you ask."
     )
-
     return {"ok": True}
