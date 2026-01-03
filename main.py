@@ -14,7 +14,6 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 ASSISTANT_CONFIG_ENV = os.getenv("ASSISTANT_CONFIG_JSON")
 
 # ================= CLIENTS =================
@@ -26,22 +25,17 @@ app = FastAPI()
 
 # ================= LOAD CONFIG (SAFE) =================
 def load_config():
-    # 1) Try environment variable (Render-safe)
     if ASSISTANT_CONFIG_ENV:
         return json.loads(ASSISTANT_CONFIG_ENV)
 
-    # 2) Try local file (dev-safe)
     try:
         with open("assistant_config.json", "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        # 3) Absolute minimal fallback (prevents crash)
         return {
             "MEMORY_RULES": [],
             "PEOPLE": [],
-            "WORK_CONTEXT": [],
-            "SENSITIVITY": [],
-            "BEHAVIOR_PREFERENCES": []
+            "WORK_CONTEXT": []
         }
 
 CONFIG = load_config()
@@ -74,7 +68,8 @@ def embed(text: str):
 # ================= RULE ENGINE =================
 def match_memory_rule(text: str):
     for rule in MEMORY_RULES:
-        if rule.get("pattern", "").lower() in text:
+        pattern = rule.get("pattern", "").lower()
+        if pattern and pattern in text:
             return rule.get("action"), rule.get("category", "auto")
     return None, None
 
@@ -94,16 +89,26 @@ def extract_last_n(text: str):
     return int(m.group(1)) if m else None
 
 # ================= STORAGE =================
-supabase.table("memories").insert({
-    "content": raw_text,                 # 🔑 REQUIRED FOR OLD SCHEMA
-    "raw_text": raw_text,
-    "normalized_text": normalize(raw_text),
-    "category": category,
-    "timestamp_utc": now_utc().isoformat(),
-    "timestamp_human": now_ist_human(),
-    "embedding": embed(raw_text),
-    "metadata": {}
-}).execute()
+def store_memory(raw_text: str, category: str):
+    supabase.table("memories").insert({
+        # 🔑 legacy compatibility
+        "content": raw_text,
+
+        # new fields
+        "raw_text": raw_text,
+        "normalized_text": normalize(raw_text),
+        "category": category,
+
+        # timestamps
+        "timestamp_utc": now_utc().isoformat(),
+        "timestamp_human": now_ist_human(),
+
+        # embedding
+        "embedding": embed(raw_text),
+
+        # future-safe
+        "metadata": {}
+    }).execute()
 
 # ================= RECALL =================
 def recall_memories(query: str, limit: int | None = None):
