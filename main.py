@@ -1,5 +1,6 @@
 import os
-from datetime import datetime
+import re
+from datetime import datetime, date
 from fastapi import FastAPI, Request
 from telegram import Bot
 from supabase import create_client
@@ -18,103 +19,40 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
 
-# ================= EMBEDDINGS =================
-def embed(text: str):
-    res = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text
-    )
-    return res.data[0].embedding
+# ================= DATE PARSER =================
+def extract_date(text: str) -> date | None:
+    text = text.lower()
 
-# ================= MEMORY SEARCH =================
-def search_memory(text: str):
-    try:
-        emb = embed(text)
-        res = supabase.rpc(
-            "match_memories",
-            {
-                "query_embedding": emb,
-                "match_threshold": 0.6,
-                "match_count": 6
-            }
-        ).execute()
-        return res.data or []
-    except Exception as e:
-        print("memory search error:", e)
-        return []
+    if "today" in text:
+        return date.today()
 
-# ================= DATE / TIME =================
-def handle_date_time(text: str):
-    t = text.lower()
-    if "today" in t or "date" in t:
-        return datetime.now().strftime("Today is %B %d, %Y.")
-    if "time" in t or "now" in t:
-        return datetime.now().strftime("The current time is %I:%M %p.")
+    if "tomorrow" in text:
+        return date.today().fromordinal(date.today().toordinal() + 1)
+
+    match = re.search(r"(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", text)
+    if match:
+        day = int(match.group(1))
+        month_str = match.group(2)
+        month_map = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+        }
+        month = month_map[month_str]
+        year = date.today().year
+        return date(year, month, day)
+
     return None
 
-# ================= UNIVERSAL INTENT PARSER =================
-def parse_intent(text: str):
-    t = text.lower().strip()
+# ================= INTENT =================
+def is_add_reminder(text: str) -> bool:
+    return any(x in text.lower() for x in [
+        "remind me", "add reminder", "set reminder"
+    ])
 
-    intent = {
-        "type": "chat",     # chat | recall | reminder | agenda | pending
-        "entity": None
-    }
-
-    if any(x in t for x in [
-        "remind me", "add reminder", "set reminder", "add a reminder"
-    ]):
-        intent["type"] = "reminder"
-
-    elif any(x in t for x in [
-        "any pending", "pending tasks", "pending reminders", "what's pending"
-    ]):
-        intent["type"] = "pending"
-
-    elif any(x in t for x in [
-        "today", "tomorrow", "tonight", "after", "focus on", "i have to"
-    ]) and "remind" not in t:
-        intent["type"] = "agenda"
-
-    elif any(x in t for x in [
-        "when", "what", "did i", "tell me", "anything",
-        "regarding", "about", "notes"
-    ]):
-        intent["type"] = "recall"
-
-    words = [w for w in t.split() if len(w) > 2]
-    if words:
-        intent["entity"] = words[-1]
-
-    return intent
-
-# ================= AI ANSWER =================
-def ai_answer(user_text: str, memories: list):
-    memory_context = "\n".join(f"- {m['content']}" for m in memories)
-
-    system_prompt = f"""
-You are a personal AI assistant with persistent memory.
-
-RULES:
-- You DO have memory.
-- If memory exists, use it.
-- Never say you have no memory.
-- If nothing matches, say: "I don’t see a matching record yet."
-
-MEMORY:
-{memory_context if memory_context else "No matching memory found"}
-"""
-
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text}
-        ],
-        temperature=0.1
-    )
-
-    return res.choices[0].message.content.strip()
+def is_list_reminders(text: str) -> bool:
+    return any(x in text.lower() for x in [
+        "upcoming reminders", "pending reminders", "what reminders", "any reminders"
+    ])
 
 # ================= WEBHOOK =================
 @app.post("/webhook")
@@ -129,61 +67,61 @@ async def webhook(request: Request):
 
     text = text.strip()
 
-    # 1️⃣ Fast date / time
-    quick = handle_date_time(text)
-    if quick:
-        await bot.send_message(chat_id, quick)
-        return {"ok": True}
+    # ---------- ADD REMINDER ----------
+    if is_add_reminder(text):
+        due = extract_date(text)
 
-    intent = parse_intent(text)
+        if not due:
+            await bot.send_message(
+                chat_id,
+                "Please tell me the date for the reminder."
+            )
+            return {"ok": True}
 
-    # 2️⃣ Pending
-    if intent["type"] == "pending":
+        supabase.table("reminders").insert({
+            "user_id": str(chat_id),
+            "title": text,
+            "due_date": due.isoformat()
+        }).execute()
+
         await bot.send_message(
             chat_id,
-            "You don’t have any pending reminders or tasks right now."
+            f"Reminder added for {due.strftime('%d %b')}."
         )
         return {"ok": True}
 
-    # 3️⃣ Reminder
-    if intent["type"] == "reminder":
-        supabase.table("memories").insert({
-            "content": text,
-            "category": "reminder",
-            "embedding": embed(text)
-        }).execute()
+    # ---------- LIST REMINDERS ----------
+    if is_list_reminders(text):
+        today = date.today().isoformat()
 
-        await bot.send_message(chat_id, "Reminder added.")
+        res = supabase.table("reminders") \
+            .select("*") \
+            .eq("user_id", str(chat_id)) \
+            .eq("completed", False) \
+            .gte("due_date", today) \
+            .order("due_date") \
+            .execute()
+
+        reminders = res.data or []
+
+        if not reminders:
+            await bot.send_message(
+                chat_id,
+                "You don’t have any upcoming reminders."
+            )
+            return {"ok": True}
+
+        lines = ["Here are your upcoming reminders:"]
+        for r in reminders:
+            d = datetime.fromisoformat(r["due_date"]).strftime("%d %b")
+            lines.append(f"- {d}: {r['title']}")
+
+        await bot.send_message(chat_id, "\n".join(lines))
         return {"ok": True}
 
-    # 4️⃣ Agenda / Notes
-    if intent["type"] == "agenda":
-        supabase.table("memories").insert({
-            "content": text,
-            "category": "agenda",
-            "embedding": embed(text)
-        }).execute()
-
-        await bot.send_message(chat_id, "Noted.")
-        return {"ok": True}
-
-    # 5️⃣ Recall
-    memories = []
-    if intent["type"] == "recall":
-        memories = search_memory(text)
-
-    reply = ai_answer(text, memories)
-
-    # 6️⃣ Always store personal facts
-    if any(x in text.lower() for x in [
-        "i had", "i have", "i went", "i faced", "i did",
-        "issue", "problem"
-    ]):
-        supabase.table("memories").insert({
-            "content": text,
-            "category": "fact",
-            "embedding": embed(text)
-        }).execute()
-
-    await bot.send_message(chat_id, reply)
+    # ---------- DEFAULT CHAT ----------
+    await bot.send_message(
+        chat_id,
+        "I can add reminders or list upcoming ones. For example: “Remind me to pay rent on 5 Jan”."
+    )
     return {"ok": True}
