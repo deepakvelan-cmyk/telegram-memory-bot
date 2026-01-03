@@ -6,7 +6,6 @@ from supabase import create_client
 
 
 
-
 # ================= CONFIG =================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -73,7 +72,9 @@ async def webhook(request: Request):
 
     # ---------- RECALL ----------
     if is_question(text):
-        memories = recall_memories(str(chat_id), text)
+        keywords = text.lower().replace("when did i", "").replace("what", "").strip()
+memories = recall_memories(str(chat_id), keywords)
+
 
         if not memories:
             await bot.send_message(chat_id, "I don’t have any record of that yet.")
