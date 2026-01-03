@@ -20,11 +20,10 @@ app = FastAPI()
 
 # ================= EMBEDDINGS =================
 def embed(text: str):
-    res = client.embeddings.create(
+    return client.embeddings.create(
         model="text-embedding-3-small",
         input=text
-    )
-    return res.data[0].embedding
+    ).data[0].embedding
 
 # ================= MEMORY SEARCH =================
 def search_memory(text: str):
@@ -34,63 +33,61 @@ def search_memory(text: str):
             "match_memories",
             {
                 "query_embedding": emb,
-                "match_threshold": 0.65,
+                "match_threshold": 0.6,
                 "match_count": 5
             }
         ).execute()
         return res.data or []
-    except Exception:
+    except:
         return []
 
 # ================= DATE / TIME =================
 def handle_date_time(text: str):
     t = text.lower()
-
     if "today" in t or "date" in t:
         return datetime.now().strftime("Today is %B %d, %Y.")
-
     if "time" in t or "now" in t:
         return datetime.now().strftime("The current time is %I:%M %p.")
-
     return None
 
-# ================= INTENT HELPERS =================
-def needs_memory(text: str):
-    triggers = ["when", "what", "which", "did i", "last", "earlier", "remember"]
-    return any(t in text.lower() for t in triggers)
+# ================= INTENT =================
+def is_past_fact_question(text: str):
+    t = text.lower()
+    return (
+        "when" in t
+        or "what" in t
+        or "did i" in t
+        or "went" in t
+        or "had" in t
+        or "issue" in t
+    )
 
 def is_pending_query(text: str):
-    return "any pending" in text.lower() or "pendings" in text.lower()
-
-def is_agenda_statement(text: str):
-    triggers = ["today", "after", "tonight", "tomorrow", "have to", "focus on"]
-    return any(t in text.lower() for t in triggers) and "remind" not in text.lower()
+    t = text.lower()
+    return "pending" in t or "tasks" in t or "reminder" in t
 
 def is_reminder(text: str):
     return "remind me" in text.lower()
 
-def is_correction(text: str):
-    triggers = ["was", "actually", "not", "instead", "on"]
-    return any(t in text.lower() for t in triggers)
+def is_agenda(text: str):
+    t = text.lower()
+    return any(x in t for x in ["today", "tomorrow", "after", "tonight", "focus on"]) and "remind" not in t
 
-# ================= AI DECISION =================
-def ai_reply(user_text: str, memories: list):
-    memory_context = "\n".join(
-        f"- {m['content']}" for m in memories if not m.get("is_override")
-    )
+# ================= AI ANSWER =================
+def ai_answer(user_text: str, memories: list):
+    memory_context = "\n".join(f"- {m['content']}" for m in memories)
 
     system_prompt = f"""
-You are a personal AI assistant for one person.
+You are a personal AI assistant with persistent memory.
 
-RULES:
-- If memory context exists, use it
-- Prefer MOST RECENT memory
-- If a correction is stated, accept the newer fact
-- Do NOT list multiple conflicting answers
-- Answer cleanly and confidently
+ABSOLUTE RULES:
+- You DO have memory.
+- If memory context exists, you MUST use it.
+- You are NOT allowed to say you have no memory.
+- If nothing is found, say "I don’t find anything recorded yet."
 
-MEMORY CONTEXT:
-{memory_context if memory_context else "None"}
+MEMORY:
+{memory_context if memory_context else "No matching memory found"}
 """
 
     res = client.chat.completions.create(
@@ -99,86 +96,72 @@ MEMORY CONTEXT:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text}
         ],
-        temperature=0.2
+        temperature=0.1
     )
 
     return res.choices[0].message.content.strip()
 
 # ================= WEBHOOK =================
 @app.post("/webhook")
-async def telegram_webhook(request: Request):
+async def webhook(request: Request):
     data = await request.json()
-    message = data.get("message", {})
-    chat_id = message.get("chat", {}).get("id")
-    text = message.get("text")
+    msg = data.get("message", {})
+    chat_id = msg.get("chat", {}).get("id")
+    text = msg.get("text")
 
     if not chat_id or not text:
         return {"ok": True}
 
     text = text.strip()
 
-    # 1️⃣ Fast date/time
+    # Fast date/time
     quick = handle_date_time(text)
     if quick:
-        await bot.send_message(chat_id=chat_id, text=quick)
+        await bot.send_message(chat_id, quick)
         return {"ok": True}
 
-    # 2️⃣ Pending query (NO embeddings)
+    # Pending check (STATE, NOT MEMORY)
     if is_pending_query(text):
-        await bot.send_message(
-            chat_id=chat_id,
-            text="I’ll check your reminders and agenda. Nothing pending right now."
-        )
+        await bot.send_message(chat_id, "You don’t have any pending reminders or tasks right now.")
         return {"ok": True}
 
-    # 3️⃣ Agenda statement
-    if is_agenda_statement(text):
-        emb = embed(text)
+    # Agenda
+    if is_agenda(text):
         supabase.table("memories").insert({
             "content": text,
             "category": "work_antler",
-            "embedding": emb,
+            "embedding": embed(text),
             "is_override": False
         }).execute()
-
-        await bot.send_message(
-            chat_id=chat_id,
-            text="Got it. I’ve noted this in your agenda."
-        )
+        await bot.send_message(chat_id, "Got it. I’ve noted this.")
         return {"ok": True}
 
-    # 4️⃣ Reminder
+    # Reminder
     if is_reminder(text):
-        emb = embed(text)
         supabase.table("memories").insert({
             "content": text,
             "category": "reminder",
-            "embedding": emb,
+            "embedding": embed(text),
             "is_override": False
         }).execute()
-
-        await bot.send_message(
-            chat_id=chat_id,
-            text="I’ll remind you as requested."
-        )
+        await bot.send_message(chat_id, "Reminder saved.")
         return {"ok": True}
 
-    # 5️⃣ Memory-based question
+    # Past fact recall
     memories = []
-    if needs_memory(text):
+    if is_past_fact_question(text):
         memories = search_memory(text)
 
-    reply = ai_reply(text, memories)
+    reply = ai_answer(text, memories)
 
-    # 6️⃣ Correction handling
-    if memories and is_correction(text):
-        emb = embed(text)
+    # Store declarative facts
+    if not is_past_fact_question(text):
         supabase.table("memories").insert({
             "content": text,
             "category": "general",
-            "embedding": emb,
-            "is_override": True
+            "embedding": embed(text),
+            "is_override": False
         }).execute()
 
-    await bot.send_message(chat_id=chat_id, text=reply)
+    await bot.send_message(chat_id, reply)
     return {"ok": True}
