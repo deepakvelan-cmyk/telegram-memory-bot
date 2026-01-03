@@ -15,24 +15,31 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = FastAPI()
 
 # ================= HELPERS =================
+
 def now_human():
     return datetime.now().strftime("%d %b %Y, %I:%M %p IST")
 
+
 def is_question(text: str) -> bool:
     triggers = [
-        "what",
-        "when",
-        "any",
-        "did i",
-        "do i have",
-        "tell me",
-        "show me",
-        "pending",
-        "issues",
-        "problems"
+        "what", "when", "any", "did i", "do i have",
+        "tell me", "show me", "pending", "issues", "problems"
     ]
     t = text.lower()
     return any(k in t for k in triggers)
+
+
+def extract_keywords(text: str):
+    stopwords = {
+        "when", "did", "i", "have", "any", "is", "was",
+        "the", "a", "an", "tell", "me", "about",
+        "what", "show", "my", "please"
+    }
+    return [
+        w for w in text.lower().split()
+        if w not in stopwords and len(w) > 2
+    ]
+
 
 def store_memory(user_id: str, text: str):
     supabase.table("memories").insert({
@@ -41,20 +48,34 @@ def store_memory(user_id: str, text: str):
         "timestamp_human": now_human()
     }).execute()
 
-def recall_memories(user_id: str, query: str, limit: int = 5):
-    res = (
+
+def recall_memories(user_id: str, text: str, limit: int = 5):
+    keywords = extract_keywords(text)
+
+    if not keywords:
+        return []
+
+    query = (
         supabase
         .table("memories")
         .select("content, timestamp_human")
         .eq("user_id", user_id)
-        .ilike("content", f"%{query}%")
+    )
+
+    for kw in keywords:
+        query = query.ilike("content", f"%{kw}%")
+
+    res = (
+        query
         .order("created_at", desc=True)
         .limit(limit)
         .execute()
     )
+
     return res.data or []
 
 # ================= WEBHOOK =================
+
 @app.post("/webhook")
 async def webhook(request: Request):
     payload = await request.json()
@@ -67,10 +88,11 @@ async def webhook(request: Request):
         return {"ok": True}
 
     text = text.strip()
+    user_id = str(chat_id)
 
     # ---------- RECALL ----------
     if is_question(text):
-        memories = recall_memories(str(chat_id), text)
+        memories = recall_memories(user_id, text)
 
         if not memories:
             await bot.send_message(chat_id, "I don’t have any record of that yet.")
@@ -84,6 +106,6 @@ async def webhook(request: Request):
         return {"ok": True}
 
     # ---------- STORE ----------
-    store_memory(str(chat_id), text)
+    store_memory(user_id, text)
     await bot.send_message(chat_id, "Noted.")
     return {"ok": True}
